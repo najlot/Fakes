@@ -12,13 +12,10 @@ Annotate a `partial` class with `[Fake]` and the generator emits implementations
 
 ## Usage
 
-Reference the marker attribute normally and the generator as an analyzer.
+The package is distributed as a NuGet package.
 
-```xml
-<ItemGroup>
-	<ProjectReference Include="..\Najlot.Fakes.Abstractions\Najlot.Fakes.Abstractions.csproj" />
-	<ProjectReference Include="..\Najlot.Fakes\Najlot.Fakes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-</ItemGroup>
+```powershell
+dotnet add package Najlot.Fakes --version 1.0.0
 ```
 
 Then declare a fake target as a `partial` class.

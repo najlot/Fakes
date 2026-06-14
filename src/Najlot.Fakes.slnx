@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="../README.md" />
+  </Folder>
   <Project Path="Najlot.Fakes.Abstractions/Najlot.Fakes.Abstractions.csproj" />
   <Project Path="Najlot.Fakes.Tests/Najlot.Fakes.Tests.csproj" />
   <Project Path="Najlot.Fakes/Najlot.Fakes.csproj" />
