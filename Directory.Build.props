@@ -1,0 +1,27 @@
+<Project>
+
+	<PropertyGroup>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Authors>Najlot</Authors>
+		<Description>Fakes is a Roslyn source generator for test doubles.</Description>
+		<PackageTags>fakes;mocks;testing;sourcegenerator;roslyn</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageProjectUrl>https://github.com/Najlot/Fakes</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/Najlot/Fakes.git</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>icon.png</PackageIcon>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+		<None Include="$(MSBuildThisFileDirectory)images/icon.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+</Project>
