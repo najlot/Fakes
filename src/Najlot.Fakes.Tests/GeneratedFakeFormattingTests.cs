@@ -45,14 +45,14 @@ internal partial class FormatterFake : IFormatter
 
 		var generatedSource = driver.GetRunResult().GeneratedTrees.Single().GetText().ToString().Replace("\r\n", "\n");
 
-		StringAssert.Contains(generatedSource, "    internal partial class FormatterFake\n    {\n");
-		StringAssert.Contains(generatedSource, "            _formatHandler = delegate(out global::System.String text)\n");
-		StringAssert.Contains(generatedSource, "            {\n");
-		StringAssert.Contains(generatedSource, "                text = default!;\n");
-		StringAssert.Contains(generatedSource, "                return value;\n");
-		StringAssert.Contains(generatedSource, "            };\n");
-		Assert.IsTrue(generatedSource.EndsWith("    }\n\n}\n"));
-		Assert.IsFalse(generatedSource.Contains("internal partial class FormatterFake\n    \n    {"));
-		Assert.IsFalse(generatedSource.EndsWith("    }\n"));
+		StringAssert.Contains(generatedSource, "	internal partial class FormatterFake\n	{\n");
+		StringAssert.Contains(generatedSource, "			_formatHandler = delegate(out global::System.String text)\n");
+		StringAssert.Contains(generatedSource, "			{\n");
+		StringAssert.Contains(generatedSource, "				text = default!;\n");
+		StringAssert.Contains(generatedSource, "				return value;\n");
+		StringAssert.Contains(generatedSource, "			};\n");
+		Assert.IsTrue(generatedSource.EndsWith("	}\n\n}\n"));
+		Assert.IsFalse(generatedSource.Contains("internal partial class FormatterFake\n	\n	{"));
+		Assert.IsFalse(generatedSource.EndsWith("	}\n"));
 	}
 }

@@ -689,18 +689,18 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		IReadOnlyList<EventPlan> eventPlans,
 		string? typeKeyHelperName)
 	{
-		using var builder = new SourceWriter();
-		builder.AppendLine("#nullable enable");
-		builder.AppendLine();
+		using var textWriter = new StringWriter();
+		using var builder = new IndentedTextWriter(textWriter, "\t");
+		builder.WriteLine("#nullable enable");
+		builder.WriteLine();
 
-		var indentation = 0;
 		if (!typeSymbol.ContainingNamespace.IsGlobalNamespace)
 		{
-			builder.Append("namespace ");
-			builder.AppendLine(typeSymbol.ContainingNamespace.ToDisplayString());
-			builder.AppendLine("{");
-			builder.AppendLine();
-			indentation++;
+			builder.Write("namespace ");
+			builder.WriteLine(typeSymbol.ContainingNamespace.ToDisplayString());
+			builder.WriteLine("{");
+			builder.WriteLine();
+			builder.Indent++;
 		}
 
 		foreach (var containingType in GetContainingTypes(typeSymbol))
@@ -710,22 +710,22 @@ public sealed class FakeGenerator : IIncrementalGenerator
 				continue;
 			}
 
-			AppendTypeDeclaration(builder, containingType, containingSyntax, indentation);
-			indentation++;
+			AppendTypeDeclaration(builder, containingType, containingSyntax);
+			builder.Indent++;
 		}
 
-		AppendTypeDeclaration(builder, typeSymbol, declarationSyntax, indentation);
-		indentation++;
+		AppendTypeDeclaration(builder, typeSymbol, declarationSyntax);
+		builder.Indent++;
 
 		var needsSpacer = false;
 		foreach (var methodPlan in methodPlans)
 		{
 			if (needsSpacer)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendMethod(builder, methodPlan, methodPlans, indentation, typeKeyHelperName);
+			AppendMethod(builder, methodPlan, methodPlans, typeKeyHelperName);
 			needsSpacer = true;
 		}
 
@@ -733,10 +733,10 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (needsSpacer)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendProperty(builder, propertyPlan, indentation);
+			AppendProperty(builder, propertyPlan);
 			needsSpacer = true;
 		}
 
@@ -744,10 +744,10 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (needsSpacer)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendEvent(builder, eventPlan, indentation);
+			AppendEvent(builder, eventPlan);
 			needsSpacer = true;
 		}
 
@@ -755,189 +755,175 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (needsSpacer)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendTypeKeyHelper(builder, typeKeyHelperName, indentation);
+			AppendTypeKeyHelper(builder, typeKeyHelperName);
 			needsSpacer = true;
 		}
 
-		indentation--;
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 
 		foreach (var _ in GetContainingTypes(typeSymbol))
 		{
-			indentation--;
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 
 		if (!typeSymbol.ContainingNamespace.IsGlobalNamespace)
 		{
-			AppendIndent(builder, 0);
-			builder.AppendLine();
-			builder.AppendLine("}");
+			builder.Indent = 0;
+			builder.WriteLine();
+			builder.WriteLine("}");
 		}
 
-		return builder.ToString();
+		return textWriter.ToString();
 	}
 
-	private static void AppendMethod(SourceWriter builder, MethodPlan plan, IReadOnlyList<MethodPlan> methodPlans, int indentation, string? typeKeyHelperName)
+	private static void AppendMethod(IndentedTextWriter builder, MethodPlan plan, IReadOnlyList<MethodPlan> methodPlans, string? typeKeyHelperName)
 	{
 		var methodSymbol = plan.Symbol;
-		AppendDelegate(builder, indentation, plan.CustomDelegateName, plan.ExposeCustomDelegate ? "public" : "private", methodSymbol.TypeParameters, methodSymbol.Parameters, methodSymbol.ReturnType, methodSymbol.ReturnsVoid, methodSymbol.ReturnsByRef, methodSymbol.ReturnsByRefReadonly);
-		builder.AppendLine();
+		AppendDelegate(builder, plan.CustomDelegateName, plan.ExposeCustomDelegate ? "public" : "private", methodSymbol.TypeParameters, methodSymbol.Parameters, methodSymbol.ReturnType, methodSymbol.ReturnsVoid, methodSymbol.ReturnsByRef, methodSymbol.ReturnsByRefReadonly);
+		builder.WriteLine();
 
 		if (plan.HandlerFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private ");
-			builder.Append(plan.CustomDelegateName);
-			builder.Append("? ");
-			builder.Append(plan.HandlerFieldName);
-			builder.AppendLine(";");
+			builder.Write("private ");
+			builder.Write(plan.CustomDelegateName);
+			builder.Write("? ");
+			builder.Write(plan.HandlerFieldName);
+			builder.WriteLine(";");
 		}
 
 		if (plan.HandlerMapName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private readonly global::System.Collections.Generic.Dictionary<global::System.String, global::System.Delegate> ");
-			builder.Append(plan.HandlerMapName);
-			builder.AppendLine(" = new();");
+			builder.Write("private readonly global::System.Collections.Generic.Dictionary<global::System.String, global::System.Delegate> ");
+			builder.Write(plan.HandlerMapName);
+			builder.WriteLine(" = new();");
 		}
 
 		if (plan.ResultMapName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private readonly global::System.Collections.Generic.Dictionary<global::System.String, object> ");
-			builder.Append(plan.ResultMapName);
-			builder.AppendLine(" = new();");
+			builder.Write("private readonly global::System.Collections.Generic.Dictionary<global::System.String, object> ");
+			builder.Write(plan.ResultMapName);
+			builder.WriteLine(" = new();");
 		}
 
 		if (plan.ParameterReturnMapName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private readonly global::System.Collections.Generic.Dictionary<");
-			builder.Append(plan.ParameterReturnKeyName);
-			builder.Append(", ");
-			builder.Append(GetTypeDisplay(methodSymbol.ReturnType));
-			builder.Append("> ");
-			builder.Append(plan.ParameterReturnMapName);
-			builder.AppendLine(" = new();");
+			builder.Write("private readonly global::System.Collections.Generic.Dictionary<");
+			builder.Write(plan.ParameterReturnKeyName);
+			builder.Write(", ");
+			builder.Write(GetTypeDisplay(methodSymbol.ReturnType));
+			builder.Write("> ");
+			builder.Write(plan.ParameterReturnMapName);
+			builder.WriteLine(" = new();");
 		}
 
 		if (plan.ResultFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private ");
-			builder.Append(GetTypeDisplay(methodSymbol.ReturnType));
-			builder.Append(' ');
-			builder.Append(plan.ResultFieldName);
-			builder.AppendLine(" = default!;");
+			builder.Write("private ");
+			builder.Write(GetTypeDisplay(methodSymbol.ReturnType));
+			builder.Write(' ');
+			builder.Write(plan.ResultFieldName);
+			builder.WriteLine(" = default!;");
 		}
 
 		if (plan.ResultHolderName is not null)
 		{
-			AppendGenericMethodResultHolder(builder, plan, indentation);
+			AppendGenericMethodResultHolder(builder, plan);
 		}
 
 		if (plan.ParameterReturnKeyName is not null)
 		{
-			AppendMethodParameterReturnKey(builder, plan, indentation);
-			builder.AppendLine();
+			AppendMethodParameterReturnKey(builder, plan);
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation);
 		if (plan.EmitCallCount)
 		{
-			builder.Append("public int ");
-			builder.Append(plan.CallCountName);
-			builder.AppendLine(" { get; private set; }");
-			builder.AppendLine();
+			builder.Write("public int ");
+			builder.Write(plan.CallCountName);
+			builder.WriteLine(" { get; private set; }");
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation);
-		builder.Append("public void ");
-		builder.Append(plan.OnMethodName);
+		builder.Write("public void ");
+		builder.Write(plan.OnMethodName);
 		AppendTypeParameters(builder, methodSymbol.TypeParameters);
-		builder.Append('(');
-		builder.Append(plan.OnMethodParameterType);
-		builder.Append(" handler)");
-		AppendConstraintLines(builder, methodSymbol.TypeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("if (handler is null)");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("throw new global::System.ArgumentNullException(nameof(handler));");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendOnMethodAssignment(builder, plan, indentation + 1);
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Write('(');
+		builder.Write(plan.OnMethodParameterType);
+		builder.Write(" handler)");
+		AppendConstraintLines(builder, methodSymbol.TypeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("if (handler is null)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("throw new global::System.ArgumentNullException(nameof(handler));");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		AppendOnMethodAssignment(builder, plan);
+		builder.Indent--;
+		builder.WriteLine("}");
 
 		if (plan.ReturnsName is not null)
 		{
-			builder.AppendLine();
-			AppendMethodReturnHelper(builder, plan, methodPlans, indentation, plan.ReturnsName, methodSymbol.ReturnType, wrapInnerResult: false, emitDefaultHelper: plan.EmitReturnsDefaultHelper);
+			builder.WriteLine();
+			AppendMethodReturnHelper(builder, plan, methodPlans, plan.ReturnsName, methodSymbol.ReturnType, wrapInnerResult: false, emitDefaultHelper: plan.EmitReturnsDefaultHelper);
 		}
 
 		if (plan.ReturnsResultName is not null && TryGetWrappedResultType(methodSymbol.ReturnType, out var wrappedResultType))
 		{
-			builder.AppendLine();
-			AppendMethodReturnHelper(builder, plan, methodPlans, indentation, plan.ReturnsResultName, wrappedResultType!, wrapInnerResult: true, emitDefaultHelper: plan.EmitReturnsResultDefaultHelper);
+			builder.WriteLine();
+			AppendMethodReturnHelper(builder, plan, methodPlans, plan.ReturnsResultName, wrappedResultType!, wrapInnerResult: true, emitDefaultHelper: plan.EmitReturnsResultDefaultHelper);
 		}
 
 		if (plan.ResultHolderMethodName is not null)
 		{
-			builder.AppendLine();
-			AppendGenericMethodResultHolderAccessor(builder, plan, indentation);
+			builder.WriteLine();
+			AppendGenericMethodResultHolderAccessor(builder, plan);
 		}
 
 		if (plan.HandlerKeyMethodName is not null && typeKeyHelperName is not null)
 		{
-			builder.AppendLine();
-			AppendHandlerKeyMethod(builder, plan.HandlerKeyMethodName, typeKeyHelperName, methodSymbol.TypeParameters, indentation);
+			builder.WriteLine();
+			AppendHandlerKeyMethod(builder, plan.HandlerKeyMethodName, typeKeyHelperName, methodSymbol.TypeParameters);
 		}
 
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.Append(GetMemberAccessibility(plan.RequiresOverride ? methodSymbol.DeclaredAccessibility : Accessibility.Public));
-		builder.Append(plan.RequiresOverride ? " override " : " ");
+		builder.WriteLine();
+		builder.Write(GetMemberAccessibility(plan.RequiresOverride ? methodSymbol.DeclaredAccessibility : Accessibility.Public));
+		builder.Write(plan.RequiresOverride ? " override " : " ");
 		AppendReturnType(builder, methodSymbol.ReturnType, methodSymbol.ReturnsVoid, methodSymbol.ReturnsByRef, methodSymbol.ReturnsByRefReadonly);
-		builder.Append(' ');
-		builder.Append(EscapeIdentifier(methodSymbol.Name));
+		builder.Write(' ');
+		builder.Write(EscapeIdentifier(methodSymbol.Name));
 		AppendTypeParameters(builder, methodSymbol.TypeParameters);
-		builder.Append('(');
+		builder.Write('(');
 		AppendParameterList(builder, methodSymbol.Parameters, ParameterRenderingMode.MemberDeclaration);
-		builder.Append(')');
-		AppendConstraintLines(builder, methodSymbol.TypeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.Append(plan.CallCountName);
-		builder.AppendLine("++;");
-		builder.AppendLine();
+		builder.Write(')');
+		AppendConstraintLines(builder, methodSymbol.TypeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write(plan.CallCountName);
+		builder.WriteLine("++;");
+		builder.WriteLine();
 
-		AppendMethodInvocation(builder, plan, indentation + 1);
+		AppendMethodInvocation(builder, plan);
 
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendProperty(SourceWriter builder, PropertyPlan plan, int indentation)
+	private static void AppendProperty(IndentedTextWriter builder, PropertyPlan plan)
 	{
 		if (plan.Getter is not null)
 		{
 			AppendDelegate(
 				builder,
-				indentation,
 				plan.GetterDelegateName!,
 				plan.ExposeCustomGetterDelegate ? "public" : "private",
 				ImmutableArray<ITypeParameterSymbol>.Empty,
@@ -946,14 +932,13 @@ public sealed class FakeGenerator : IIncrementalGenerator
 				returnsVoid: false,
 				returnsByRef: false,
 				returnsByRefReadonly: false);
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
 		if (plan.Setter is not null)
 		{
 			AppendDelegate(
 				builder,
-				indentation,
 				plan.SetterDelegateName!,
 				plan.ExposeCustomSetterDelegate ? "public" : "private",
 				ImmutableArray<ITypeParameterSymbol>.Empty,
@@ -964,246 +949,220 @@ public sealed class FakeGenerator : IIncrementalGenerator
 				returnsByRefReadonly: false,
 				trailingParameterType: plan.Symbol.Type,
 				trailingParameterName: AssignedValueParameterName);
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
 		if (plan.GetHandlerFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private ");
-			builder.Append(plan.GetterDelegateName);
-			builder.Append("? ");
-			builder.Append(plan.GetHandlerFieldName);
-			builder.AppendLine(";");
+			builder.Write("private ");
+			builder.Write(plan.GetterDelegateName);
+			builder.Write("? ");
+			builder.Write(plan.GetHandlerFieldName);
+			builder.WriteLine(";");
 		}
 
 		if (plan.SetHandlerFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private ");
-			builder.Append(plan.SetterDelegateName);
-			builder.Append("? ");
-			builder.Append(plan.SetHandlerFieldName);
-			builder.AppendLine(";");
+			builder.Write("private ");
+			builder.Write(plan.SetterDelegateName);
+			builder.Write("? ");
+			builder.Write(plan.SetHandlerFieldName);
+			builder.WriteLine(";");
 		}
 
 		if (plan.BackingFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("private ");
-			builder.Append(GetTypeDisplay(plan.Symbol.Type));
-			builder.Append(' ');
-			builder.Append(plan.BackingFieldName);
-			builder.AppendLine(" = default!;");
+			builder.Write("private ");
+			builder.Write(GetTypeDisplay(plan.Symbol.Type));
+			builder.Write(' ');
+			builder.Write(plan.BackingFieldName);
+			builder.WriteLine(" = default!;");
 		}
 
 		if (plan.GetCallCountName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("public int ");
-			builder.Append(plan.GetCallCountName);
-			builder.AppendLine(" { get; private set; }");
+			builder.Write("public int ");
+			builder.Write(plan.GetCallCountName);
+			builder.WriteLine(" { get; private set; }");
 		}
 
 		if (plan.SetCallCountName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("public int ");
-			builder.Append(plan.SetCallCountName);
-			builder.AppendLine(" { get; private set; }");
+			builder.Write("public int ");
+			builder.Write(plan.SetCallCountName);
+			builder.WriteLine(" { get; private set; }");
 		}
 
 		if (plan.GetCallCountName is not null || plan.SetCallCountName is not null)
 		{
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
 		if (plan.OnGetName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("public void ");
-			builder.Append(plan.OnGetName);
-			builder.Append('(');
-			builder.Append(plan.GetHandlerTypeName);
-			builder.Append(" handler)");
-			builder.AppendLine();
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("if (handler is null)");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 2);
-			builder.AppendLine("throw new global::System.ArgumentNullException(nameof(handler));");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("}");
-			builder.AppendLine();
-			AppendOnPropertyGetterAssignment(builder, plan, indentation + 1);
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
-			builder.AppendLine();
+			builder.Write("public void ");
+			builder.Write(plan.OnGetName);
+			builder.Write('(');
+			builder.Write(plan.GetHandlerTypeName);
+			builder.Write(" handler)");
+			builder.WriteLine();
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.WriteLine("if (handler is null)");
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.WriteLine("throw new global::System.ArgumentNullException(nameof(handler));");
+			builder.Indent--;
+			builder.WriteLine("}");
+			builder.WriteLine();
+			AppendOnPropertyGetterAssignment(builder, plan);
+			builder.Indent--;
+			builder.WriteLine("}");
+			builder.WriteLine();
 		}
 
 		if (plan.OnSetName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("public void ");
-			builder.Append(plan.OnSetName);
-			builder.Append('(');
-			builder.Append(plan.SetHandlerTypeName);
-			builder.Append(" handler)");
-			builder.AppendLine();
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("if (handler is null)");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 2);
-			builder.AppendLine("throw new global::System.ArgumentNullException(nameof(handler));");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("}");
-			builder.AppendLine();
-			AppendOnPropertySetterAssignment(builder, plan, indentation + 1);
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
-			builder.AppendLine();
+			builder.Write("public void ");
+			builder.Write(plan.OnSetName);
+			builder.Write('(');
+			builder.Write(plan.SetHandlerTypeName);
+			builder.Write(" handler)");
+			builder.WriteLine();
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.WriteLine("if (handler is null)");
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.WriteLine("throw new global::System.ArgumentNullException(nameof(handler));");
+			builder.Indent--;
+			builder.WriteLine("}");
+			builder.WriteLine();
+			AppendOnPropertySetterAssignment(builder, plan);
+			builder.Indent--;
+			builder.WriteLine("}");
+			builder.WriteLine();
 		}
 
 		if (plan.ReturnsName is not null)
 		{
-			AppendPropertyReturnHelper(builder, plan, indentation, plan.ReturnsName, plan.Symbol.Type, wrapInnerResult: false);
-			builder.AppendLine();
+			AppendPropertyReturnHelper(builder, plan, plan.ReturnsName, plan.Symbol.Type, wrapInnerResult: false);
+			builder.WriteLine();
 		}
 
 		if (plan.ReturnsResultName is not null && TryGetWrappedResultType(plan.Symbol.Type, out var wrappedResultType))
 		{
-			AppendPropertyReturnHelper(builder, plan, indentation, plan.ReturnsResultName, wrappedResultType!, wrapInnerResult: true);
-			builder.AppendLine();
+			AppendPropertyReturnHelper(builder, plan, plan.ReturnsResultName, wrappedResultType!, wrapInnerResult: true);
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation);
-		builder.Append(GetMemberAccessibility(plan.RequiresOverride ? plan.Symbol.DeclaredAccessibility : Accessibility.Public));
-		builder.Append(plan.RequiresOverride ? " override " : " ");
-		builder.Append(GetTypeDisplay(plan.Symbol.Type));
-		builder.Append(' ');
+		builder.Write(GetMemberAccessibility(plan.RequiresOverride ? plan.Symbol.DeclaredAccessibility : Accessibility.Public));
+		builder.Write(plan.RequiresOverride ? " override " : " ");
+		builder.Write(GetTypeDisplay(plan.Symbol.Type));
+		builder.Write(' ');
 		if (plan.Symbol.IsIndexer)
 		{
-			builder.Append("this[");
+			builder.Write("this[");
 			AppendParameterList(builder, plan.Symbol.Parameters, ParameterRenderingMode.MemberDeclaration);
-			builder.Append(']');
+			builder.Write(']');
 		}
 		else
 		{
-			builder.Append(EscapeIdentifier(plan.Symbol.Name));
+			builder.Write(EscapeIdentifier(plan.Symbol.Name));
 		}
 
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
 
 		if (plan.Getter is not null || (plan.RequiresOverride && plan.Symbol.GetMethod is not null))
 		{
-			AppendAccessor(builder, plan, indentation + 1, isGetter: true);
+			AppendAccessor(builder, plan, isGetter: true);
 		}
 
 		if (plan.Setter is not null || (plan.RequiresOverride && plan.Symbol.SetMethod is not null))
 		{
-			AppendAccessor(builder, plan, indentation + 1, isGetter: false);
+			AppendAccessor(builder, plan, isGetter: false);
 		}
 
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendEvent(SourceWriter builder, EventPlan plan, int indentation)
+	private static void AppendEvent(IndentedTextWriter builder, EventPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private ");
-		builder.Append(GetTypeDisplay(plan.Symbol.Type));
-		builder.Append(' ');
-		builder.Append(plan.BackingFieldName);
-		builder.AppendLine(" = default!;");
-		AppendIndent(builder, indentation);
-		builder.Append("public int ");
-		builder.Append(plan.AddCallCountName);
-		builder.AppendLine(" { get; private set; }");
-		AppendIndent(builder, indentation);
-		builder.Append("public int ");
-		builder.Append(plan.RemoveCallCountName);
-		builder.AppendLine(" { get; private set; }");
-		builder.AppendLine();
+		builder.Write("private ");
+		builder.Write(GetTypeDisplay(plan.Symbol.Type));
+		builder.Write(' ');
+		builder.Write(plan.BackingFieldName);
+		builder.WriteLine(" = default!;");
+		builder.Write("public int ");
+		builder.Write(plan.AddCallCountName);
+		builder.WriteLine(" { get; private set; }");
+		builder.Write("public int ");
+		builder.Write(plan.RemoveCallCountName);
+		builder.WriteLine(" { get; private set; }");
+		builder.WriteLine();
 
-		AppendIndent(builder, indentation);
-		builder.Append(GetMemberAccessibility(plan.RequiresOverride ? plan.Symbol.DeclaredAccessibility : Accessibility.Public));
-		builder.Append(plan.RequiresOverride ? " override event " : " event ");
-		builder.Append(GetTypeDisplay(plan.Symbol.Type));
-		builder.Append(' ');
-		builder.Append(EscapeIdentifier(plan.Symbol.Name));
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("add");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.Append(plan.AddCallCountName);
-		builder.AppendLine("++;");
-		AppendIndent(builder, indentation + 2);
-		builder.Append(plan.BackingFieldName);
-		builder.AppendLine(" += value;");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("remove");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.Append(plan.RemoveCallCountName);
-		builder.AppendLine("++;");
-		AppendIndent(builder, indentation + 2);
-		builder.Append(plan.BackingFieldName);
-		builder.AppendLine(" -= value;");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Write(GetMemberAccessibility(plan.RequiresOverride ? plan.Symbol.DeclaredAccessibility : Accessibility.Public));
+		builder.Write(plan.RequiresOverride ? " override event " : " event ");
+		builder.Write(GetTypeDisplay(plan.Symbol.Type));
+		builder.Write(' ');
+		builder.Write(EscapeIdentifier(plan.Symbol.Name));
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("add");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write(plan.AddCallCountName);
+		builder.WriteLine("++;");
+		builder.Write(plan.BackingFieldName);
+		builder.WriteLine(" += value;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		builder.WriteLine("remove");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write(plan.RemoveCallCountName);
+		builder.WriteLine("++;");
+		builder.Write(plan.BackingFieldName);
+		builder.WriteLine(" -= value;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 
 		if (plan.Symbol.Type is INamedTypeSymbol delegateType && delegateType.DelegateInvokeMethod is { } invokeMethod)
 		{
-			builder.AppendLine();
-			AppendIndent(builder, indentation);
-			builder.Append("public void ");
-			builder.Append(plan.RaiseMethodName);
-			builder.Append('(');
+			builder.WriteLine();
+			builder.Write("public void ");
+			builder.Write(plan.RaiseMethodName);
+			builder.Write('(');
 			AppendParameterList(builder, invokeMethod.Parameters, ParameterRenderingMode.MemberDeclaration);
-			builder.AppendLine(")");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
-			builder.Append("if (");
-			builder.Append(plan.BackingFieldName);
-			builder.AppendLine(" is null)");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 2);
-			builder.AppendLine("return;");
-			AppendIndent(builder, indentation + 1);
-			builder.AppendLine("}");
-			builder.AppendLine();
-			AppendIndent(builder, indentation + 1);
-			builder.Append(plan.BackingFieldName);
-			builder.Append(".Invoke(");
+			builder.WriteLine(")");
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.Write("if (");
+			builder.Write(plan.BackingFieldName);
+			builder.WriteLine(" is null)");
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.WriteLine("return;");
+			builder.Indent--;
+			builder.WriteLine("}");
+			builder.WriteLine();
+			builder.Write(plan.BackingFieldName);
+			builder.Write(".Invoke(");
 			AppendArgumentList(builder, invokeMethod.Parameters);
-			builder.AppendLine(");");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.WriteLine(");");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 	}
 
-	private static void AppendAccessor(SourceWriter builder, PropertyPlan plan, int indentation, bool isGetter)
+	private static void AppendAccessor(IndentedTextWriter builder, PropertyPlan plan, bool isGetter)
 	{
 		var accessorMethod = isGetter ? plan.Symbol.GetMethod : plan.Symbol.SetMethod;
 		if (accessorMethod is null)
@@ -1213,225 +1172,205 @@ public sealed class FakeGenerator : IIncrementalGenerator
 
 		var isRequired = isGetter ? plan.Getter is not null : plan.Setter is not null;
 		var accessorAccessibility = GetAccessorAccessibility(accessorMethod, plan.Symbol.DeclaredAccessibility);
-		AppendIndent(builder, indentation);
 		if (accessorAccessibility.Length > 0)
 		{
-			builder.Append(accessorAccessibility);
-			builder.Append(' ');
+			builder.Write(accessorAccessibility);
+			builder.Write(' ');
 		}
-		builder.Append(isGetter ? "get" : accessorMethod.IsInitOnly ? "init" : "set");
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		builder.Write(isGetter ? "get" : accessorMethod.IsInitOnly ? "init" : "set");
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
 
 		if (isGetter)
 		{
 			if (isRequired)
 			{
-				AppendIndent(builder, indentation + 1);
-				builder.Append(plan.GetCallCountName);
-				builder.AppendLine("++;");
-				builder.AppendLine();
-				AppendIndent(builder, indentation + 1);
-				builder.Append("if (");
-				builder.Append(plan.GetHandlerFieldName);
-				builder.AppendLine(" is not null)");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("{");
-				AppendIndent(builder, indentation + 2);
-				builder.Append("return ");
-				builder.Append(plan.GetHandlerFieldName);
-				builder.Append('(');
+				builder.Write(plan.GetCallCountName);
+				builder.WriteLine("++;");
+				builder.WriteLine();
+				builder.Write("if (");
+				builder.Write(plan.GetHandlerFieldName);
+				builder.WriteLine(" is not null)");
+				builder.WriteLine("{");
+				builder.Indent++;
+				builder.Write("return ");
+				builder.Write(plan.GetHandlerFieldName);
+				builder.Write('(');
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("}");
-				builder.AppendLine();
+				builder.WriteLine(");");
+				builder.Indent--;
+				builder.WriteLine("}");
+				builder.WriteLine();
 
-				AppendIndent(builder, indentation + 1);
-				builder.Append("return ");
+				builder.Write("return ");
 				if (plan.BackingFieldName is not null)
 				{
-					builder.Append(plan.BackingFieldName);
+					builder.Write(plan.BackingFieldName);
 				}
 				else
 				{
-					builder.Append(GetDefaultReturnExpression(plan.Symbol.Type));
+					builder.Write(GetDefaultReturnExpression(plan.Symbol.Type));
 				}
-				builder.AppendLine(";");
+				builder.WriteLine(";");
 			}
 			else
 			{
-				AppendIndent(builder, indentation + 1);
-				builder.Append("return base.");
+				builder.Write("return base.");
 				AppendBasePropertyReference(builder, plan.Symbol);
-				builder.AppendLine(";");
+				builder.WriteLine(";");
 			}
 		}
 		else
 		{
 			if (isRequired)
 			{
-				AppendIndent(builder, indentation + 1);
-				builder.Append(plan.SetCallCountName);
-				builder.AppendLine("++;");
-				builder.AppendLine();
+				builder.Write(plan.SetCallCountName);
+				builder.WriteLine("++;");
+				builder.WriteLine();
 
-				AppendIndent(builder, indentation + 1);
-				builder.Append("if (");
-				builder.Append(plan.SetHandlerFieldName);
-				builder.AppendLine(" is not null)");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("{");
-				AppendIndent(builder, indentation + 2);
-				builder.Append(plan.SetHandlerFieldName);
-				builder.Append('(');
+				builder.Write("if (");
+				builder.Write(plan.SetHandlerFieldName);
+				builder.WriteLine(" is not null)");
+				builder.WriteLine("{");
+				builder.Indent++;
+				builder.Write(plan.SetHandlerFieldName);
+				builder.Write('(');
 				AppendArgumentList(builder, plan.Symbol.Parameters);
 				if (plan.Symbol.Parameters.Length > 0)
 				{
-					builder.Append(", ");
+					builder.Write(", ");
 				}
-				builder.AppendLine("value);");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("}");
+				builder.WriteLine("value);");
+				builder.Indent--;
+				builder.WriteLine("}");
 
 				if (plan.BackingFieldName is not null)
 				{
-					builder.AppendLine();
-					AppendIndent(builder, indentation + 1);
-					builder.Append(plan.BackingFieldName);
-					builder.AppendLine(" = value;");
+					builder.WriteLine();
+					builder.Write(plan.BackingFieldName);
+					builder.WriteLine(" = value;");
 				}
 			}
 			else
 			{
-				AppendIndent(builder, indentation + 1);
-				builder.Append("base.");
+				builder.Write("base.");
 				AppendBasePropertyReference(builder, plan.Symbol);
-				builder.AppendLine(" = value;");
+				builder.WriteLine(" = value;");
 			}
 		}
 
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendMethodInvocation(SourceWriter builder, MethodPlan plan, int indentation)
+	private static void AppendMethodInvocation(IndentedTextWriter builder, MethodPlan plan)
 	{
 		if (plan.ParameterReturnMapName is not null)
 		{
 			var returnValueLocalName = GetParameterReturnValueLocalName(plan.Symbol.Parameters);
 
-			AppendIndent(builder, indentation);
-			builder.Append("if (");
-			builder.Append(plan.ParameterReturnMapName);
-			builder.Append(".TryGetValue(new ");
-			builder.Append(plan.ParameterReturnKeyName);
-			builder.Append('(');
+			builder.Write("if (");
+			builder.Write(plan.ParameterReturnMapName);
+			builder.Write(".TryGetValue(new ");
+			builder.Write(plan.ParameterReturnKeyName);
+			builder.Write('(');
 			AppendParameterKeyArgumentList(builder, plan.Symbol.Parameters);
-			builder.Append("), out var ");
-			builder.Append(returnValueLocalName);
-			builder.AppendLine("))");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
-			builder.Append("return ");
-			builder.Append(returnValueLocalName);
-			builder.AppendLine(";");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.Write("), out var ");
+			builder.Write(returnValueLocalName);
+			builder.WriteLine("))");
+			builder.WriteLine("{");
+			builder.Indent++;
+			builder.Write("return ");
+			builder.Write(returnValueLocalName);
+			builder.WriteLine(";");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 
 		if (plan.HandlerFieldName is not null)
 		{
 			if (plan.ParameterReturnMapName is not null)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendIndent(builder, indentation);
-			builder.Append("if (");
-			builder.Append(plan.HandlerFieldName);
-			builder.AppendLine(" is not null)");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
+			builder.Write("if (");
+			builder.Write(plan.HandlerFieldName);
+			builder.WriteLine(" is not null)");
+			builder.WriteLine("{");
+			builder.Indent++;
 			if (plan.Symbol.ReturnsVoid)
 			{
-				builder.Append(plan.HandlerFieldName);
-				builder.Append('(');
+				builder.Write(plan.HandlerFieldName);
+				builder.Write('(');
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("return;");
+				builder.WriteLine(");");
+				builder.WriteLine("return;");
 			}
 			else if (plan.Symbol.ReturnsByRef || plan.Symbol.ReturnsByRefReadonly)
 			{
-				builder.Append("return ref ");
-				builder.Append(plan.HandlerFieldName);
-				builder.Append('(');
+				builder.Write("return ref ");
+				builder.Write(plan.HandlerFieldName);
+				builder.Write('(');
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
+				builder.WriteLine(");");
 			}
 			else
 			{
-				builder.Append("return ");
-				builder.Append(plan.HandlerFieldName);
-				builder.Append('(');
+				builder.Write("return ");
+				builder.Write(plan.HandlerFieldName);
+				builder.Write('(');
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
+				builder.WriteLine(");");
 			}
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 		else if (plan.HandlerMapName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("if (");
-			builder.Append(plan.HandlerMapName);
-			builder.Append(".TryGetValue(");
-			builder.Append(plan.HandlerKeyMethodName);
+			builder.Write("if (");
+			builder.Write(plan.HandlerMapName);
+			builder.Write(".TryGetValue(");
+			builder.Write(plan.HandlerKeyMethodName);
 			AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-			builder.AppendLine("(), out var handler))");
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
-			AppendIndent(builder, indentation + 1);
+			builder.WriteLine("(), out var handler))");
+			builder.WriteLine("{");
+			builder.Indent++;
 			if (plan.Symbol.ReturnsVoid)
 			{
-				builder.Append("((");
-				builder.Append(plan.CustomDelegateName);
+				builder.Write("((");
+				builder.Write(plan.CustomDelegateName);
 				AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-				builder.Append(")handler)(");
+				builder.Write(")handler)(");
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
-				AppendIndent(builder, indentation + 1);
-				builder.AppendLine("return;");
+				builder.WriteLine(");");
+				builder.WriteLine("return;");
 			}
 			else
 			{
-				builder.Append(plan.Symbol.ReturnsByRef || plan.Symbol.ReturnsByRefReadonly ? "return ref ((" : "return ((");
-				builder.Append(plan.CustomDelegateName);
+				builder.Write(plan.Symbol.ReturnsByRef || plan.Symbol.ReturnsByRefReadonly ? "return ref ((" : "return ((");
+				builder.Write(plan.CustomDelegateName);
 				AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-				builder.Append(")handler)(");
+				builder.Write(")handler)(");
 				AppendArgumentList(builder, plan.Symbol.Parameters);
-				builder.AppendLine(");");
+				builder.WriteLine(");");
 			}
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 
 		if (plan.Symbol.Parameters.Any(static parameter => parameter.RefKind == RefKind.Out))
 		{
 			if (plan.HandlerFieldName is not null || plan.HandlerMapName is not null)
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
 			foreach (var outParameter in plan.Symbol.Parameters.Where(static parameter => parameter.RefKind == RefKind.Out))
 			{
-				AppendIndent(builder, indentation);
-				builder.Append(EscapeIdentifier(outParameter.Name));
-				builder.AppendLine(" = default!;");
+				builder.Write(EscapeIdentifier(outParameter.Name));
+				builder.WriteLine(" = default!;");
 			}
 		}
 
@@ -1444,32 +1383,29 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (plan.Symbol.Parameters.Any(static parameter => parameter.RefKind == RefKind.Out))
 			{
-				builder.AppendLine();
+				builder.WriteLine();
 			}
 
-			AppendIndent(builder, indentation);
-			builder.Append("return ref ");
+			builder.Write("return ref ");
 			AppendMethodRefResultReference(builder, plan);
-			builder.AppendLine(";");
+			builder.WriteLine(";");
 			return;
 		}
 
 		if (plan.Symbol.Parameters.Any(static parameter => parameter.RefKind == RefKind.Out))
 		{
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation);
-		builder.Append("return ");
-		builder.Append(GetDefaultReturnExpression(plan.Symbol.ReturnType));
-		builder.AppendLine(";");
+		builder.Write("return ");
+		builder.Write(GetDefaultReturnExpression(plan.Symbol.ReturnType));
+		builder.WriteLine(";");
 	}
 
 	private static void AppendMethodReturnHelper(
-		SourceWriter builder,
+		IndentedTextWriter builder,
 		MethodPlan plan,
 		IReadOnlyList<MethodPlan> methodPlans,
-		int indentation,
 		string methodName,
 		ITypeSymbol valueType,
 		bool wrapInnerResult,
@@ -1479,26 +1415,25 @@ public sealed class FakeGenerator : IIncrementalGenerator
 
 		if (emitDefaultHelper)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append("public void ");
-			builder.Append(methodName);
+			builder.Write("public void ");
+			builder.Write(methodName);
 			AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-			builder.Append('(');
-			builder.Append(GetTypeDisplay(valueType));
-			builder.Append(' ');
-			builder.Append(valueParameterName);
-			builder.Append(')');
-			AppendConstraintLines(builder, plan.Symbol.TypeParameters, indentation);
-			builder.AppendLine();
-			AppendIndent(builder, indentation);
-			builder.AppendLine("{");
+			builder.Write('(');
+			builder.Write(GetTypeDisplay(valueType));
+			builder.Write(' ');
+			builder.Write(valueParameterName);
+			builder.Write(')');
+			AppendConstraintLines(builder, plan.Symbol.TypeParameters);
+			builder.WriteLine();
+			builder.WriteLine("{");
+			builder.Indent++;
 			foreach (var assignmentPlan in GetMethodReturnAssignmentPlans(plan, methodPlans, methodName, valueType, wrapInnerResult))
 			{
-				AppendMethodReturnAssignment(builder, assignmentPlan, indentation + 1, wrapInnerResult ? GetWrappedReturnExpression(assignmentPlan.Symbol.ReturnType, valueParameterName) : valueParameterName);
+				AppendMethodReturnAssignment(builder, assignmentPlan, wrapInnerResult ? GetWrappedReturnExpression(assignmentPlan.Symbol.ReturnType, valueParameterName) : valueParameterName);
 			}
 
-			AppendIndent(builder, indentation);
-			builder.AppendLine("}");
+			builder.Indent--;
+			builder.WriteLine("}");
 		}
 
 		if (plan.ParameterReturnMapName is null)
@@ -1508,31 +1443,29 @@ public sealed class FakeGenerator : IIncrementalGenerator
 
 		if (emitDefaultHelper)
 		{
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation);
-		builder.Append("public void ");
-		builder.Append(methodName);
+		builder.Write("public void ");
+		builder.Write(methodName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append('(');
+		builder.Write('(');
 		AppendParameterList(builder, plan.Symbol.Parameters, ParameterRenderingMode.MemberDeclaration, valueType, valueParameterName);
-		builder.Append(')');
-		AppendConstraintLines(builder, plan.Symbol.TypeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.Append(plan.ParameterReturnMapName);
-		builder.Append("[new ");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.Append('(');
+		builder.Write(')');
+		AppendConstraintLines(builder, plan.Symbol.TypeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write(plan.ParameterReturnMapName);
+		builder.Write("[new ");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.Write('(');
 		AppendParameterKeyArgumentList(builder, plan.Symbol.Parameters);
-		builder.Append(")] = ");
-		builder.Append(wrapInnerResult ? GetWrappedReturnExpression(plan.Symbol.ReturnType, valueParameterName) : valueParameterName);
-		builder.AppendLine(";");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Write(")] = ");
+		builder.Write(wrapInnerResult ? GetWrappedReturnExpression(plan.Symbol.ReturnType, valueParameterName) : valueParameterName);
+		builder.WriteLine(";");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
 	private static IEnumerable<MethodPlan> GetMethodReturnAssignmentPlans(MethodPlan plan, IEnumerable<MethodPlan> methodPlans, string methodName, ITypeSymbol valueType, bool wrapInnerResult)
@@ -1566,30 +1499,27 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		}
 	}
 
-	private static void AppendMethodReturnAssignment(SourceWriter builder, MethodPlan plan, int indentation, string returnExpression)
+	private static void AppendMethodReturnAssignment(IndentedTextWriter builder, MethodPlan plan, string returnExpression)
 	{
 		if (plan.Symbol.ReturnsByRef || plan.Symbol.ReturnsByRefReadonly)
 		{
-			AppendIndent(builder, indentation);
 			AppendMethodRefResultReference(builder, plan);
-			builder.Append(" = ");
-			builder.Append(returnExpression);
-			builder.AppendLine(";");
+			builder.Write(" = ");
+			builder.Write(returnExpression);
+			builder.WriteLine(";");
 
 			if (plan.HandlerFieldName is not null)
 			{
-				AppendIndent(builder, indentation);
-				builder.Append(plan.HandlerFieldName);
-				builder.AppendLine(" = null;");
+				builder.Write(plan.HandlerFieldName);
+				builder.WriteLine(" = null;");
 			}
 			else if (plan.HandlerMapName is not null)
 			{
-				AppendIndent(builder, indentation);
-				builder.Append(plan.HandlerMapName);
-				builder.Append(".Remove(");
-				builder.Append(plan.HandlerKeyMethodName);
+				builder.Write(plan.HandlerMapName);
+				builder.Write(".Remove(");
+				builder.Write(plan.HandlerKeyMethodName);
 				AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-				builder.AppendLine("());");
+				builder.WriteLine("());");
 			}
 
 			return;
@@ -1597,416 +1527,371 @@ public sealed class FakeGenerator : IIncrementalGenerator
 
 		if (plan.HandlerFieldName is not null)
 		{
-			AppendIndent(builder, indentation);
-			builder.Append(plan.HandlerFieldName);
-			builder.Append(" = ");
-			AppendConstantReturnDelegate(builder, indentation, plan.CustomDelegateName, plan.Symbol.TypeParameters, plan.Symbol.Parameters, plan.Symbol.ReturnType, returnExpression);
-			builder.AppendLine(";");
+			builder.Write(plan.HandlerFieldName);
+			builder.Write(" = ");
+			AppendConstantReturnDelegate(builder, plan.CustomDelegateName, plan.Symbol.TypeParameters, plan.Symbol.Parameters, plan.Symbol.ReturnType, returnExpression);
+			builder.WriteLine(";");
 			return;
 		}
 
-		AppendIndent(builder, indentation);
-		builder.Append(plan.HandlerMapName);
-		builder.Append('[');
-		builder.Append(plan.HandlerKeyMethodName);
+		builder.Write(plan.HandlerMapName);
+		builder.Write('[');
+		builder.Write(plan.HandlerKeyMethodName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append("] = ");
-		builder.Append('(');
-		builder.Append(plan.CustomDelegateName);
+		builder.Write("()] = ");
+		builder.Write('(');
+		builder.Write(plan.CustomDelegateName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append(')');
-		AppendConstantReturnDelegate(builder, indentation, plan.CustomDelegateName, plan.Symbol.TypeParameters, plan.Symbol.Parameters, plan.Symbol.ReturnType, returnExpression);
-		builder.AppendLine(";");
+		builder.Write(')');
+		AppendConstantReturnDelegate(builder, plan.CustomDelegateName, plan.Symbol.TypeParameters, plan.Symbol.Parameters, plan.Symbol.ReturnType, returnExpression);
+		builder.WriteLine(";");
 	}
 
-	private static void AppendMethodParameterReturnKey(SourceWriter builder, MethodPlan plan, int indentation)
+	private static void AppendMethodParameterReturnKey(IndentedTextWriter builder, MethodPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private readonly struct ");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.Append(" : global::System.IEquatable<");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.AppendLine(">");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		builder.Write("private readonly struct ");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.Write(" : global::System.IEquatable<");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.WriteLine(">");
+		builder.WriteLine("{");
+		builder.Indent++;
 
 		for (var index = 0; index < plan.Symbol.Parameters.Length; index++)
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append("private readonly ");
-			builder.Append(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
-			builder.Append(" _parameter");
-			builder.Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-			builder.AppendLine(";");
+			builder.Write("private readonly ");
+			builder.Write(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
+			builder.Write(" _parameter");
+			builder.Write(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			builder.WriteLine(";");
 		}
 
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 1);
-		builder.Append("public ");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.Append('(');
+		builder.WriteLine();
+		builder.Write("public ");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.Write('(');
 		AppendParameterList(builder, plan.Symbol.Parameters, ParameterRenderingMode.MemberDeclaration);
-		builder.AppendLine(")");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
+		builder.WriteLine(")");
+		builder.WriteLine("{");
+		builder.Indent++;
 		for (var index = 0; index < plan.Symbol.Parameters.Length; index++)
 		{
-			AppendIndent(builder, indentation + 2);
-			builder.Append("_parameter");
-			builder.Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-			builder.Append(" = ");
-			builder.Append(EscapeIdentifier(plan.Symbol.Parameters[index].Name));
-			builder.AppendLine(";");
+			builder.Write("_parameter");
+			builder.Write(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			builder.Write(" = ");
+			builder.Write(EscapeIdentifier(plan.Symbol.Parameters[index].Name));
+			builder.WriteLine(";");
 		}
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
 
-		AppendIndent(builder, indentation + 1);
-		builder.Append("public bool Equals(");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.AppendLine(" other)");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.Append("return ");
+		builder.Write("public bool Equals(");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.WriteLine(" other)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("return ");
 		for (var index = 0; index < plan.Symbol.Parameters.Length; index++)
 		{
 			if (index > 0)
 			{
-				builder.AppendLine();
-				AppendIndent(builder, indentation + 3);
-				builder.Append("&& ");
+				builder.WriteLine();
+				builder.Indent++;
+				builder.Write("&& ");
+				builder.Indent--;
 			}
 
-			builder.Append("global::System.Collections.Generic.EqualityComparer<");
-			builder.Append(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
-			builder.Append(">.Default.Equals(_parameter");
-			builder.Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-			builder.Append(", other._parameter");
-			builder.Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-			builder.Append(')');
+			builder.Write("global::System.Collections.Generic.EqualityComparer<");
+			builder.Write(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
+			builder.Write(">.Default.Equals(_parameter");
+			builder.Write(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			builder.Write(", other._parameter");
+			builder.Write(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			builder.Write(')');
 		}
-		builder.AppendLine(";");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
+		builder.WriteLine(";");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
 
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("public override bool Equals(object? obj)");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.Append("return obj is ");
-		builder.Append(plan.ParameterReturnKeyName);
-		builder.AppendLine(" other && Equals(other);");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
+		builder.WriteLine("public override bool Equals(object? obj)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("return obj is ");
+		builder.Write(plan.ParameterReturnKeyName);
+		builder.WriteLine(" other && Equals(other);");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
 
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("public override int GetHashCode()");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("unchecked");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 3);
-		builder.AppendLine("var hashCode = 17;");
+		builder.WriteLine("public override int GetHashCode()");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("unchecked");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("var hashCode = 17;");
 		for (var index = 0; index < plan.Symbol.Parameters.Length; index++)
 		{
-			AppendIndent(builder, indentation + 3);
-			builder.Append("hashCode = (hashCode * 31) + global::System.Collections.Generic.EqualityComparer<");
-			builder.Append(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
-			builder.Append(">.Default.GetHashCode(_parameter");
-			builder.Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-			builder.AppendLine("!);");
+			builder.Write("hashCode = (hashCode * 31) + global::System.Collections.Generic.EqualityComparer<");
+			builder.Write(GetTypeDisplay(plan.Symbol.Parameters[index].Type));
+			builder.Write(">.Default.GetHashCode(_parameter");
+			builder.Write(index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+			builder.WriteLine("!);");
 		}
-		AppendIndent(builder, indentation + 3);
-		builder.AppendLine("return hashCode;");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("}");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.WriteLine("return hashCode;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendOnMethodAssignment(SourceWriter builder, MethodPlan plan, int indentation)
+	private static void AppendOnMethodAssignment(IndentedTextWriter builder, MethodPlan plan)
 	{
 		if (!plan.UsesBuiltInHandler)
 		{
-			AppendIndent(builder, indentation);
 			if (plan.HandlerFieldName is not null)
 			{
-				builder.Append(plan.HandlerFieldName);
-				builder.AppendLine(" = handler;");
+				builder.Write(plan.HandlerFieldName);
+				builder.WriteLine(" = handler;");
 			}
 			else
 			{
-				builder.Append(plan.HandlerMapName);
-				builder.Append('[');
-				builder.Append(plan.HandlerKeyMethodName);
+				builder.Write(plan.HandlerMapName);
+				builder.Write('[');
+				builder.Write(plan.HandlerKeyMethodName);
 				AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-				builder.AppendLine("()] = handler;");
+				builder.WriteLine("()] = handler;");
 			}
 			return;
 		}
 
 		var wrapper = BuildBuiltInDelegateWrapper(plan.Symbol.Parameters, "handler");
 
-		AppendIndent(builder, indentation);
 		if (plan.HandlerFieldName is not null)
 		{
-			builder.Append(plan.HandlerFieldName);
-			builder.Append(" = ");
-			builder.Append(wrapper);
-			builder.AppendLine(";");
+			builder.Write(plan.HandlerFieldName);
+			builder.Write(" = ");
+			builder.Write(wrapper);
+			builder.WriteLine(";");
 		}
 		else
 		{
-			builder.Append(plan.HandlerMapName);
-			builder.Append('[');
-			builder.Append(plan.HandlerKeyMethodName);
+			builder.Write(plan.HandlerMapName);
+			builder.Write('[');
+			builder.Write(plan.HandlerKeyMethodName);
 			AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-			builder.Append("] = (");
-			builder.Append(plan.CustomDelegateName);
+			builder.Write("()] = (");
+			builder.Write(plan.CustomDelegateName);
 			AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-			builder.Append(")");
-			builder.Append(wrapper);
-			builder.AppendLine(";");
+			builder.Write(")(");
+			builder.Write(wrapper);
+			builder.WriteLine(");");
 		}
 	}
 
-	private static void AppendPropertyReturnHelper(SourceWriter builder, PropertyPlan plan, int indentation, string methodName, ITypeSymbol valueType, bool wrapInnerResult)
+	private static void AppendPropertyReturnHelper(IndentedTextWriter builder, PropertyPlan plan, string methodName, ITypeSymbol valueType, bool wrapInnerResult)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("public void ");
-		builder.Append(methodName);
-		builder.Append('(');
-		builder.Append(GetTypeDisplay(valueType));
-		builder.Append(" value)");
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		builder.Write("public void ");
+		builder.Write(methodName);
+		builder.Write('(');
+		builder.Write(GetTypeDisplay(valueType));
+		builder.Write(" value)");
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
 		var returnExpression = wrapInnerResult ? GetWrappedReturnExpression(plan.Symbol.Type, "value") : "value";
 
 		if (plan.BackingFieldName is not null)
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append(plan.BackingFieldName);
-			builder.Append(" = ");
-			builder.Append(returnExpression);
-			builder.AppendLine(";");
-			AppendIndent(builder, indentation + 1);
-			builder.Append(plan.GetHandlerFieldName);
-			builder.AppendLine(" = null;");
+			builder.Write(plan.BackingFieldName);
+			builder.Write(" = ");
+			builder.Write(returnExpression);
+			builder.WriteLine(";");
+			builder.Write(plan.GetHandlerFieldName);
+			builder.WriteLine(" = null;");
 		}
 		else
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append(plan.GetHandlerFieldName);
-			builder.Append(" = ");
-			AppendConstantReturnDelegate(builder, indentation + 1, plan.GetterDelegateName!, ImmutableArray<ITypeParameterSymbol>.Empty, plan.Symbol.Parameters, plan.Symbol.Type, returnExpression);
-			builder.AppendLine(";");
+			builder.Write(plan.GetHandlerFieldName);
+			builder.Write(" = ");
+			AppendConstantReturnDelegate(builder, plan.GetterDelegateName!, ImmutableArray<ITypeParameterSymbol>.Empty, plan.Symbol.Parameters, plan.Symbol.Type, returnExpression);
+			builder.WriteLine(";");
 		}
 
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendOnPropertyGetterAssignment(SourceWriter builder, PropertyPlan plan, int indentation)
+	private static void AppendOnPropertyGetterAssignment(IndentedTextWriter builder, PropertyPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append(plan.GetHandlerFieldName);
-		builder.Append(" = ");
-		builder.Append(plan.GetterUsesBuiltInHandler
+		builder.Write(plan.GetHandlerFieldName);
+		builder.Write(" = ");
+		builder.Write(plan.GetterUsesBuiltInHandler
 			? BuildBuiltInDelegateWrapper(plan.Symbol.Parameters, "handler")
 			: "handler");
-		builder.AppendLine(";");
+		builder.WriteLine(";");
 	}
 
-	private static void AppendOnPropertySetterAssignment(SourceWriter builder, PropertyPlan plan, int indentation)
+	private static void AppendOnPropertySetterAssignment(IndentedTextWriter builder, PropertyPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append(plan.SetHandlerFieldName);
-		builder.Append(" = ");
-		builder.Append(plan.SetterUsesBuiltInHandler
+		builder.Write(plan.SetHandlerFieldName);
+		builder.Write(" = ");
+		builder.Write(plan.SetterUsesBuiltInHandler
 			? BuildBuiltInDelegateWrapper(plan.Symbol.Parameters, handlerName: "handler", trailingParameterName: AssignedValueParameterName)
 			: "handler");
-		builder.AppendLine(";");
+		builder.WriteLine(";");
 	}
 
-	private static void AppendGenericMethodResultHolder(SourceWriter builder, MethodPlan plan, int indentation)
+	private static void AppendGenericMethodResultHolder(IndentedTextWriter builder, MethodPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private sealed class ");
-		builder.Append(plan.ResultHolderName);
+		builder.Write("private sealed class ");
+		builder.Write(plan.ResultHolderName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		AppendConstraintLines(builder, plan.Symbol.TypeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.Append("public ");
-		builder.Append(GetTypeDisplay(plan.Symbol.ReturnType));
-		builder.AppendLine(" Value = default!;");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
-		builder.AppendLine();
+		AppendConstraintLines(builder, plan.Symbol.TypeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("public ");
+		builder.Write(GetTypeDisplay(plan.Symbol.ReturnType));
+		builder.WriteLine(" Value = default!;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
 	}
 
-	private static void AppendGenericMethodResultHolderAccessor(SourceWriter builder, MethodPlan plan, int indentation)
+	private static void AppendGenericMethodResultHolderAccessor(IndentedTextWriter builder, MethodPlan plan)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private ");
-		builder.Append(plan.ResultHolderName);
+		builder.Write("private ");
+		builder.Write(plan.ResultHolderName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append(' ');
-		builder.Append(plan.ResultHolderMethodName);
+		builder.Write(' ');
+		builder.Write(plan.ResultHolderMethodName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append("()");
-		AppendConstraintLines(builder, plan.Symbol.TypeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.Append("var key = ");
-		builder.Append(plan.HandlerKeyMethodName);
+		builder.Write("()");
+		AppendConstraintLines(builder, plan.Symbol.TypeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("var key = ");
+		builder.Write(plan.HandlerKeyMethodName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.AppendLine("();");
-		AppendIndent(builder, indentation + 1);
-		builder.Append("if (!");
-		builder.Append(plan.ResultMapName);
-		builder.AppendLine(".TryGetValue(key, out var holder))");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.Append("holder = new ");
-		builder.Append(plan.ResultHolderName);
+		builder.WriteLine("();");
+		builder.Write("if (!");
+		builder.Write(plan.ResultMapName);
+		builder.WriteLine(".TryGetValue(key, out var holder))");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("holder = new ");
+		builder.Write(plan.ResultHolderName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.AppendLine("();");
-		AppendIndent(builder, indentation + 2);
-		builder.Append(plan.ResultMapName);
-		builder.AppendLine("[key] = holder;");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 1);
-		builder.Append("return (");
-		builder.Append(plan.ResultHolderName);
+		builder.WriteLine("();");
+		builder.Write(plan.ResultMapName);
+		builder.WriteLine("[key] = holder;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		builder.Write("return (");
+		builder.Write(plan.ResultHolderName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.AppendLine(")holder;");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.WriteLine(")holder;");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendMethodRefResultReference(SourceWriter builder, MethodPlan plan)
+	private static void AppendMethodRefResultReference(IndentedTextWriter builder, MethodPlan plan)
 	{
 		if (plan.ResultFieldName is not null)
 		{
-			builder.Append(plan.ResultFieldName);
+			builder.Write(plan.ResultFieldName);
 			return;
 		}
 
-		builder.Append(plan.ResultHolderMethodName);
+		builder.Write(plan.ResultHolderMethodName);
 		AppendTypeParameters(builder, plan.Symbol.TypeParameters);
-		builder.Append("().Value");
+		builder.Write("().Value");
 	}
 
-	private static void AppendTypeKeyHelper(SourceWriter builder, string helperName, int indentation)
+	private static void AppendTypeKeyHelper(IndentedTextWriter builder, string helperName)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private static global::System.String ");
-		builder.Append(helperName);
-		builder.AppendLine("(params global::System.Type[] types)");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("if (types.Length == 0)");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("return global::System.String.Empty;");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("var builder = new global::System.Text.StringBuilder();");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("for (var index = 0; index < types.Length; index++)");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("if (index > 0)");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 3);
-		builder.AppendLine("builder.Append('|');");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("var current = types[index];");
-		AppendIndent(builder, indentation + 2);
-		builder.AppendLine("builder.Append(current.AssemblyQualifiedName ?? current.FullName ?? current.Name);");
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("}");
-		builder.AppendLine();
-		AppendIndent(builder, indentation + 1);
-		builder.AppendLine("return builder.ToString();");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.Write("private static global::System.String ");
+		builder.Write(helperName);
+		builder.WriteLine("(params global::System.Type[] types)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("if (types.Length == 0)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("return global::System.String.Empty;");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		builder.WriteLine("var builder = new global::System.Text.StringBuilder();");
+		builder.WriteLine("for (var index = 0; index < types.Length; index++)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("if (index > 0)");
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.WriteLine("builder.Append('|');");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		builder.WriteLine("var current = types[index];");
+		builder.WriteLine("builder.Append(current.AssemblyQualifiedName ?? current.FullName ?? current.Name);");
+		builder.Indent--;
+		builder.WriteLine("}");
+		builder.WriteLine();
+		builder.WriteLine("return builder.ToString();");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendHandlerKeyMethod(SourceWriter builder, string methodName, string typeKeyHelperName, ImmutableArray<ITypeParameterSymbol> typeParameters, int indentation)
+	private static void AppendHandlerKeyMethod(IndentedTextWriter builder, string methodName, string typeKeyHelperName, ImmutableArray<ITypeParameterSymbol> typeParameters)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append("private static global::System.String ");
-		builder.Append(methodName);
+		builder.Write("private static global::System.String ");
+		builder.Write(methodName);
 		AppendTypeParameters(builder, typeParameters);
-		builder.Append("()");
-		AppendConstraintLines(builder, typeParameters, indentation);
-		builder.AppendLine();
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
-		AppendIndent(builder, indentation + 1);
-		builder.Append("return ");
-		builder.Append(typeKeyHelperName);
-		builder.Append('(');
+		builder.Write("()");
+		AppendConstraintLines(builder, typeParameters);
+		builder.WriteLine();
+		builder.WriteLine("{");
+		builder.Indent++;
+		builder.Write("return ");
+		builder.Write(typeKeyHelperName);
+		builder.Write('(');
 		for (var index = 0; index < typeParameters.Length; index++)
 		{
 			if (index > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
-			builder.Append("typeof(");
-			builder.Append(typeParameters[index].Name);
-			builder.Append(')');
+			builder.Write("typeof(");
+			builder.Write(typeParameters[index].Name);
+			builder.Write(')');
 		}
-		builder.AppendLine(");");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("}");
+		builder.WriteLine(");");
+		builder.Indent--;
+		builder.WriteLine("}");
 	}
 
-	private static void AppendTypeDeclaration(SourceWriter builder, INamedTypeSymbol symbol, TypeDeclarationSyntax syntax, int indentation)
+	private static void AppendTypeDeclaration(IndentedTextWriter builder, INamedTypeSymbol symbol, TypeDeclarationSyntax syntax)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append(GetTypeModifiers(syntax));
-		builder.Append(GetTypeKeyword(syntax));
-		builder.Append(' ');
-		builder.Append(EscapeIdentifier(symbol.Name));
+		builder.Write(GetTypeModifiers(syntax));
+		builder.Write(GetTypeKeyword(syntax));
+		builder.Write(' ');
+		builder.Write(EscapeIdentifier(symbol.Name));
 		AppendTypeParameters(builder, symbol.TypeParameters);
-		AppendTypeConstraintLines(builder, symbol.TypeParameters, indentation);
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		AppendTypeConstraintLines(builder, symbol.TypeParameters);
+		builder.WriteLine("{");
 	}
 
 	private static void AppendDelegate(
-		SourceWriter builder,
-		int indentation,
+		IndentedTextWriter builder,
 		string delegateName,
 		string accessibility,
 		ImmutableArray<ITypeParameterSymbol> typeParameters,
@@ -2018,66 +1903,66 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		ITypeSymbol? trailingParameterType = null,
 		string? trailingParameterName = null)
 	{
-		AppendIndent(builder, indentation);
-		builder.Append(accessibility);
-		builder.Append(" delegate ");
+		builder.Write(accessibility);
+		builder.Write(" delegate ");
 		AppendReturnType(builder, returnType, returnsVoid, returnsByRef, returnsByRefReadonly);
-		builder.Append(' ');
-		builder.Append(delegateName);
+		builder.Write(' ');
+		builder.Write(delegateName);
 		AppendTypeParameters(builder, typeParameters);
-		builder.Append('(');
+		builder.Write('(');
 		AppendParameterList(builder, parameters, ParameterRenderingMode.DelegateDeclaration, trailingParameterType, trailingParameterName);
-		builder.Append(')');
+		builder.Write(')');
 
 		var constraints = BuildConstraintClauses(typeParameters);
 		if (constraints.Count == 0)
 		{
-			builder.AppendLine(";");
+			builder.WriteLine(";");
 			return;
 		}
 
-		builder.AppendLine();
+		builder.WriteLine();
 		for (var index = 0; index < constraints.Count; index++)
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append("where ");
-			builder.Append(constraints[index]);
-			builder.AppendLine(index == constraints.Count - 1 ? ";" : string.Empty);
+			builder.Indent++;
+			builder.Write("where ");
+			builder.Write(constraints[index]);
+			builder.WriteLine(index == constraints.Count - 1 ? ";" : string.Empty);
+			builder.Indent--;
 		}
 	}
 
-	private static void AppendReturnType(SourceWriter builder, ITypeSymbol? returnType, bool returnsVoid, bool returnsByRef, bool returnsByRefReadonly)
+	private static void AppendReturnType(IndentedTextWriter builder, ITypeSymbol? returnType, bool returnsVoid, bool returnsByRef, bool returnsByRefReadonly)
 	{
 		if (returnsByRefReadonly)
 		{
-			builder.Append("ref readonly ");
+			builder.Write("ref readonly ");
 		}
 		else if (returnsByRef)
 		{
-			builder.Append("ref ");
+			builder.Write("ref ");
 		}
 
-		builder.Append(returnsVoid ? "void" : GetTypeDisplay(returnType!));
+		builder.Write(returnsVoid ? "void" : GetTypeDisplay(returnType!));
 	}
 
-	private static void AppendTypeParameters(SourceWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters)
+	private static void AppendTypeParameters(IndentedTextWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters)
 	{
 		if (typeParameters.Length == 0)
 		{
 			return;
 		}
 
-		builder.Append('<');
+		builder.Write('<');
 		for (var index = 0; index < typeParameters.Length; index++)
 		{
 			if (index > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
-			builder.Append(typeParameters[index].Name);
+			builder.Write(typeParameters[index].Name);
 		}
-		builder.Append('>');
+		builder.Write('>');
 	}
 
 	private static string GetTypeParameterUsage(ImmutableArray<ITypeParameterSymbol> typeParameters)
@@ -2087,25 +1972,26 @@ public sealed class FakeGenerator : IIncrementalGenerator
 			: "<" + string.Join(", ", typeParameters.Select(static typeParameter => typeParameter.Name)) + ">";
 	}
 
-	private static void AppendTypeConstraintLines(SourceWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters, int indentation)
+	private static void AppendTypeConstraintLines(IndentedTextWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters)
 	{
 		var constraints = BuildConstraintClauses(typeParameters);
 		if (constraints.Count == 0)
 		{
-			builder.AppendLine();
+			builder.WriteLine();
 			return;
 		}
 
-		builder.AppendLine();
+		builder.WriteLine();
 		foreach (var constraint in constraints)
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append("where ");
-			builder.AppendLine(constraint);
+			builder.Indent++;
+			builder.Write("where ");
+			builder.WriteLine(constraint);
+			builder.Indent--;
 		}
 	}
 
-	private static void AppendConstraintLines(SourceWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters, int indentation)
+	private static void AppendConstraintLines(IndentedTextWriter builder, ImmutableArray<ITypeParameterSymbol> typeParameters)
 	{
 		var constraints = BuildConstraintClauses(typeParameters);
 		if (constraints.Count == 0)
@@ -2113,13 +1999,14 @@ public sealed class FakeGenerator : IIncrementalGenerator
 			return;
 		}
 
-		builder.AppendLine();
+		builder.WriteLine();
 		foreach (var constraint in constraints)
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append("where ");
-			builder.Append(constraint);
-			builder.AppendLine();
+			builder.Indent++;
+			builder.Write("where ");
+			builder.Write(constraint);
+			builder.WriteLine();
+			builder.Indent--;
 		}
 	}
 
@@ -2166,38 +2053,35 @@ public sealed class FakeGenerator : IIncrementalGenerator
 	}
 
 	private static void AppendConstantReturnDelegate(
-		SourceWriter builder,
-		int indentation,
+		IndentedTextWriter builder,
 		string delegateName,
 		ImmutableArray<ITypeParameterSymbol> typeParameters,
 		ImmutableArray<IParameterSymbol> parameters,
 		ITypeSymbol returnType,
 		string returnExpression)
 	{
-		builder.Append("delegate(");
+		builder.Write("delegate(");
 		AppendParameterList(builder, parameters, ParameterRenderingMode.AnonymousMethod);
-		builder.AppendLine(")");
-		AppendIndent(builder, indentation);
-		builder.AppendLine("{");
+		builder.WriteLine(")");
+		builder.WriteLine("{");
+		builder.Indent++;
 
 		foreach (var outParameter in parameters.Where(static parameter => parameter.RefKind == RefKind.Out))
 		{
-			AppendIndent(builder, indentation + 1);
-			builder.Append(EscapeIdentifier(outParameter.Name));
-			builder.AppendLine(" = default!;");
+			builder.Write(EscapeIdentifier(outParameter.Name));
+			builder.WriteLine(" = default!;");
 		}
 
 		if (parameters.Any(static parameter => parameter.RefKind == RefKind.Out))
 		{
-			builder.AppendLine();
+			builder.WriteLine();
 		}
 
-		AppendIndent(builder, indentation + 1);
-		builder.Append("return ");
-		builder.Append(returnExpression);
-		builder.AppendLine(";");
-		AppendIndent(builder, indentation);
-		builder.Append("}");
+		builder.Write("return ");
+		builder.Write(returnExpression);
+		builder.WriteLine(";");
+		builder.Indent--;
+		builder.Write("}");
 	}
 
 	private static string BuildBuiltInDelegateWrapper(ImmutableArray<IParameterSymbol> parameters, string handlerName, string? trailingParameterName = null)
@@ -2252,7 +2136,7 @@ public sealed class FakeGenerator : IIncrementalGenerator
 	}
 
 	private static void AppendParameterList(
-		SourceWriter builder,
+		IndentedTextWriter builder,
 		ImmutableArray<IParameterSymbol> parameters,
 		ParameterRenderingMode mode,
 		ITypeSymbol? trailingParameterType = null,
@@ -2262,7 +2146,7 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (index > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
 			AppendParameter(builder, parameters[index], mode);
@@ -2272,26 +2156,26 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		{
 			if (parameters.Length > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
 			if (mode != ParameterRenderingMode.ArgumentList)
 			{
-				builder.Append(GetTypeDisplay(trailingParameterType));
-				builder.Append(' ');
+				builder.Write(GetTypeDisplay(trailingParameterType));
+				builder.Write(' ');
 			}
 
-			builder.Append(EscapeIdentifier(trailingParameterName!));
+			builder.Write(EscapeIdentifier(trailingParameterName!));
 		}
 	}
 
-	private static void AppendParameter(SourceWriter builder, IParameterSymbol parameter, ParameterRenderingMode mode)
+	private static void AppendParameter(IndentedTextWriter builder, IParameterSymbol parameter, ParameterRenderingMode mode)
 	{
 		if (mode is ParameterRenderingMode.MemberDeclaration or ParameterRenderingMode.DelegateDeclaration)
 		{
 			if (parameter.IsParams)
 			{
-				builder.Append("params ");
+				builder.Write("params ");
 			}
 		}
 
@@ -2300,42 +2184,42 @@ public sealed class FakeGenerator : IIncrementalGenerator
 			: GetParameterModifier(parameter.RefKind);
 		if (modifier.Length > 0)
 		{
-			builder.Append(modifier);
-			builder.Append(' ');
+			builder.Write(modifier);
+			builder.Write(' ');
 		}
 
 		if (mode != ParameterRenderingMode.ArgumentList)
 		{
-			builder.Append(GetTypeDisplay(parameter.Type));
-			builder.Append(' ');
+			builder.Write(GetTypeDisplay(parameter.Type));
+			builder.Write(' ');
 		}
 
-		builder.Append(EscapeIdentifier(parameter.Name));
+		builder.Write(EscapeIdentifier(parameter.Name));
 	}
 
-	private static void AppendArgumentList(SourceWriter builder, ImmutableArray<IParameterSymbol> parameters)
+	private static void AppendArgumentList(IndentedTextWriter builder, ImmutableArray<IParameterSymbol> parameters)
 	{
 		for (var index = 0; index < parameters.Length; index++)
 		{
 			if (index > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
 			AppendParameter(builder, parameters[index], ParameterRenderingMode.ArgumentList);
 		}
 	}
 
-	private static void AppendParameterKeyArgumentList(SourceWriter builder, ImmutableArray<IParameterSymbol> parameters)
+	private static void AppendParameterKeyArgumentList(IndentedTextWriter builder, ImmutableArray<IParameterSymbol> parameters)
 	{
 		for (var index = 0; index < parameters.Length; index++)
 		{
 			if (index > 0)
 			{
-				builder.Append(", ");
+				builder.Write(", ");
 			}
 
-			builder.Append(EscapeIdentifier(parameters[index].Name));
+			builder.Write(EscapeIdentifier(parameters[index].Name));
 		}
 	}
 
@@ -2373,17 +2257,17 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		}
 	}
 
-	private static void AppendBasePropertyReference(SourceWriter builder, IPropertySymbol propertySymbol)
+	private static void AppendBasePropertyReference(IndentedTextWriter builder, IPropertySymbol propertySymbol)
 	{
 		if (propertySymbol.IsIndexer)
 		{
-			builder.Append("this[");
+			builder.Write("this[");
 			AppendArgumentList(builder, propertySymbol.Parameters);
-			builder.Append(']');
+			builder.Write(']');
 			return;
 		}
 
-		builder.Append(EscapeIdentifier(propertySymbol.Name));
+		builder.Write(EscapeIdentifier(propertySymbol.Name));
 	}
 
 	private static bool HasFakeAttribute(INamedTypeSymbol typeSymbol, INamedTypeSymbol fakeAttributeSymbol)
@@ -2941,11 +2825,6 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		return char.ToLowerInvariant(identifier[0]) + identifier.Substring(1);
 	}
 
-	private static void AppendIndent(SourceWriter builder, int indentation)
-	{
-		builder.Indent = indentation;
-	}
-
 	private sealed class MemberCollection
 	{
 		public List<MethodRequirement> Methods { get; } = new();
@@ -3071,54 +2950,6 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		string AddCallCountName,
 		string RemoveCallCountName,
 		string RaiseMethodName);
-
-	private sealed class SourceWriter : IDisposable
-	{
-		private readonly StringWriter _textWriter = new();
-		private readonly IndentedTextWriter _writer;
-
-		public SourceWriter()
-		{
-			_writer = new IndentedTextWriter(_textWriter, "    ");
-		}
-
-		public int Indent
-		{
-			get => _writer.Indent;
-			set => _writer.Indent = value;
-		}
-
-		public void Append(string? value)
-		{
-			_writer.Write(value);
-		}
-
-		public void Append(char value)
-		{
-			_writer.Write(value);
-		}
-
-		public void AppendLine()
-		{
-			_writer.WriteLine();
-		}
-
-		public void AppendLine(string? value)
-		{
-			_writer.WriteLine(value);
-		}
-
-		public override string ToString()
-		{
-			return _textWriter.ToString();
-		}
-
-		public void Dispose()
-		{
-			_writer.Dispose();
-			_textWriter.Dispose();
-		}
-	}
 
 	private sealed class NameAllocator
 	{
