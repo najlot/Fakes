@@ -15,7 +15,7 @@ Annotate a `partial` class with `[Fake]` and the generator emits implementations
 The package is distributed as a NuGet package.
 
 ```powershell
-dotnet add package Najlot.Fakes --version 1.0.0
+dotnet add package Najlot.Fakes
 ```
 
 Then declare a fake target as a `partial` class.
