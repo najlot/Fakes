@@ -70,42 +70,20 @@ public sealed class FakeGenerator : IIncrementalGenerator
 
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
-		var candidateTypes = context.SyntaxProvider.CreateSyntaxProvider(
-			static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
-			static (generatorContext, _) => (TypeDeclarationSyntax)generatorContext.Node);
+		var provider = context.SyntaxProvider.ForAttributeWithMetadataName(
+			FakeAttributeMetadataName,
+			predicate: static (node, _) => node is TypeDeclarationSyntax,
+			transform: static (generatorContext, _) => new GenerationContext(
+				(TypeDeclarationSyntax)generatorContext.TargetNode,
+				(INamedTypeSymbol)generatorContext.TargetSymbol));
 
-		var compilationAndCandidates = context.CompilationProvider.Combine(candidateTypes.Collect());
-
-		context.RegisterSourceOutput(compilationAndCandidates, static (productionContext, source) =>
+		context.RegisterSourceOutput(provider, static (productionContext, source) =>
 		{
-			var compilation = source.Left;
-			var candidates = source.Right;
-
-			var fakeAttributeSymbol = compilation.GetTypeByMetadataName(FakeAttributeMetadataName);
-			if (fakeAttributeSymbol is null)
-			{
-				return;
-			}
-
-			var processedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-
-			foreach (var candidate in candidates)
-			{
-				var semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
-				if (semanticModel.GetDeclaredSymbol(candidate) is not INamedTypeSymbol typeSymbol)
-				{
-					continue;
-				}
-
-				if (!processedTypes.Add(typeSymbol) || !HasFakeAttribute(typeSymbol, fakeAttributeSymbol))
-				{
-					continue;
-				}
-
-				GenerateType(productionContext, typeSymbol, candidate);
-			}
+			GenerateType(productionContext, source.Symbol, source.Declaration);
 		});
 	}
+
+	private readonly record struct GenerationContext(TypeDeclarationSyntax Declaration, INamedTypeSymbol Symbol);
 
 	private static void GenerateType(SourceProductionContext context, INamedTypeSymbol typeSymbol, TypeDeclarationSyntax declarationSyntax)
 	{
@@ -2268,19 +2246,6 @@ public sealed class FakeGenerator : IIncrementalGenerator
 		}
 
 		builder.Write(EscapeIdentifier(propertySymbol.Name));
-	}
-
-	private static bool HasFakeAttribute(INamedTypeSymbol typeSymbol, INamedTypeSymbol fakeAttributeSymbol)
-	{
-		foreach (var attribute in typeSymbol.GetAttributes())
-		{
-			if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, fakeAttributeSymbol))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	private static string BuildHintName(INamedTypeSymbol typeSymbol)
